@@ -1,5 +1,26 @@
 This is a partial baselines package, containing an added implementation of the Expected and Surrogate Sigma-DDPG Algorithms, and the Expected and Surrogate alpha-DQN algorithms.
 
+# Running the Algorithms
+
+## alpha-DQN
+Running the alpha-DQN for Atari is made by running the following line:
+
+`python baselines/deepq/experiment/run_atari.py`
+
+- The *alpha* flag turns on the alpha-criterion.
+- The *surrogate* flag turns on the surrogate version.
+- The *expected* flag turns on the expected version.
+
+## sigma-DDPG
+
+Running the sigma-DDPG for Mujoco is made by running the following line:
+
+`python baselines/ddpg/main.py`
+
+
+
+# Installation
+
 For installation, first follow the normal baselines installation.
 
 Notice that this is an old baselines implementation, tested with tensorflow-gpu-1.6.0 and CUDA 9.0.
