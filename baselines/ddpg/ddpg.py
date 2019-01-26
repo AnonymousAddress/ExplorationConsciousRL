@@ -65,8 +65,8 @@ class DDPG(object):
         gamma=0.99, tau=0.001, normalize_returns=False, enable_popart=False, normalize_observations=True,
         batch_size=128, observation_range=(-5., 5.), action_range=(-1., 1.), return_range=(-np.inf, np.inf),
         adaptive_param_noise=True, adaptive_param_noise_policy_threshold=.1,
-        critic_l2_reg=0., actor_lr=1e-4, critic_lr=1e-3, clip_norm=None, reward_scale=1., alpha=None, Q1=False,
-                 alpha_num_samples=10, random_actor=False, grad_num_samples=10):
+        critic_l2_reg=0., actor_lr=1e-4, critic_lr=1e-3, clip_norm=None, reward_scale=1., sigma=None, surrogate=False,
+                 expected=False, sigma_num_samples=10, random_actor=False, grad_num_samples=10):
         # Inputs.
         self.obs0 = tf.placeholder(tf.float32, shape=(None,) + observation_shape, name='obs0')
         self.obs1 = tf.placeholder(tf.float32, shape=(None,) + observation_shape, name='obs1')
@@ -99,8 +99,9 @@ class DDPG(object):
         self.batch_size = batch_size
         self.stats_sample = None
         self.critic_l2_reg = critic_l2_reg
-        self.alpha = alpha
-        self.Q1 = Q1
+        self.sigma = sigma
+        self.expected = expected
+        self.surrogate = surrogate
         self.random_actor = random_actor
 
         # Observation normalization.
@@ -133,7 +134,7 @@ class DDPG(object):
         self.actor_tf = actor(normalized_obs0)
         self.normalized_critic_tf = critic(normalized_obs0, self.actions)
         self.critic_tf = denormalize(tf.clip_by_value(self.normalized_critic_tf, self.return_range[0], self.return_range[1]), self.ret_rms)
-        if self.alpha is not None and self.action_noise is not None and not self.Q1 and self.random_actor:
+        if self.sigma is not None and self.action_noise is not None and expected and self.random_actor:
             critic_with_actor_tf_list = []
             for i in range(grad_num_samples):
                 # noise = self.action_noise.memory_noise(self.prev_noises)
@@ -148,14 +149,11 @@ class DDPG(object):
             self.normalized_critic_with_actor_tf = critic(normalized_obs0, self.actor_tf, reuse=True)
             self.critic_with_actor_tf = denormalize(tf.clip_by_value(self.normalized_critic_with_actor_tf, self.return_range[0], self.return_range[1]), self.ret_rms)
         action = target_actor(normalized_obs1)
-        if self.alpha is not None and self.action_noise is not None and not self.Q1:
-            # noise = self.action_noise.memory_noise(self.noises, num_samples=num_samples)
-            # noisy_action = tf.transpose(tf.transpose(noise) + tf.expand_dims(action, axis=2),[0,2,1])
-            # clipped_action = tf.clip_by_value(noisy_action, self.action_range[0], self.action_range[1])
-            # Q_obs1 = tf.reduce_mean(denormalize(target_critic(normalized_obs1 + tf.zeros(shape=(tf.shape(normalized_obs1)[0], num_samples, normalized_obs1.shape[1])),
-            #                                                                              clipped_action), self.ret_rms), axis=1)
+        if self.sigma is not None and self.action_noise is not None and expected:
+            # noise = self.action_noise.memory_noise(self.noises, num_samples=num_samples) # preparation for OU noise
+
             Q_obs1_list = []
-            for i in range(alpha_num_samples):
+            for i in range(sigma_num_samples):
                 if i > 0:
                     reuse = True
                 else:
@@ -316,7 +314,7 @@ class DDPG(object):
             q = None
         return action, q, noise, prev_noise
 
-    def pi_Q1(self, obs, apply_noise=True, compute_Q=True):
+    def pi_surrogate(self, obs, apply_noise=True, compute_Q=True):
         if self.param_noise is not None and apply_noise:
             actor_tf = self.perturbed_actor_tf
         else:

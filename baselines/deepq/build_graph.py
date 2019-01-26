@@ -250,12 +250,12 @@ def build_act_eps(make_obs_ph, q_func, num_actions, scope="deepq", reuse=None):
         update_eps_expr = eps.assign(tf.cond(update_eps_ph >= 0, lambda: update_eps_ph, lambda: eps))
 
 
-        _act = U.function(inputs=[observations_ph, stochastic_ph, update_eps_ph, optimal_test_ph],
+        _act = U.function(inputs=[observations_ph, stochastic_ph, update_eps_ph],
                  outputs=[output_actions, deterministic_actions, chose_random],
-                 givens={update_eps_ph: -1.0, stochastic_ph: True, optimal_test_ph: False},
+                 givens={update_eps_ph: -1.0, stochastic_ph: True},
                  updates=[update_eps_expr])
-        def act(ob, stochastic=True, update_eps=-1, optimal_test=False):
-            return _act(ob, stochastic, update_eps, optimal_test)
+        def act(ob, stochastic=True, update_eps=-1):
+            return _act(ob, stochastic, update_eps)
 
         return act
 
@@ -431,8 +431,7 @@ def build_train(make_obs_ph, make_fixed_obs_ph, q_func, num_actions, optimizer, 
         a bunch of functions to print debug data like q_values.
     """
     if epsilon:
-        act_f = build_act_eps(make_obs_ph, q_func, num_actions, optimal_test=optimal_test, auto_eps=auto_eps,
-                              combined=combined, scope=scope, reuse=reuse)
+        act_f = build_act_eps(make_obs_ph, q_func, num_actions, scope=scope, reuse=reuse)
     elif param_noise:
         act_f = build_act_with_param_noise(make_obs_ph, q_func, num_actions, scope=scope, reuse=reuse,
             param_noise_filter_func=param_noise_filter_func)
@@ -515,11 +514,6 @@ def build_train(make_obs_ph, make_fixed_obs_ph, q_func, num_actions, optimizer, 
 
         # compute the error (potentially clipped)
         errors = U.huber_loss(td_error)
-        if q3:
-            errors = tf.reduce_mean(errors,1)
-        if q1_improved:
-            errors += U.huber_loss(td_error_env)
-            errors += tf.reduce_sum(U.huber_loss(td_error_others), 1)
         weighted_error = tf.reduce_mean(importance_weights_ph * errors)
 
 

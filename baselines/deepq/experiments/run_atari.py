@@ -33,9 +33,6 @@ def main():
 
 
     args = parser.parse_args()
-    if args.test_eps:
-        assert(args.steps == 1 or args.eps_val  == 0.001)
-    assert(args.lam == 0 and args.steps == 1)
     if args.alpha:
         assert(bool(args.expected) != bool(args.surrogate)) # both versions can't run together
     if args.surrogate:

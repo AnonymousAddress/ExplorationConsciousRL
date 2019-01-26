@@ -84,7 +84,7 @@ def run(env_id, seed, noise_type, layer_norm, evaluation, **kwargs):
 def parse_args():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-    parser.add_argument('--env-id', type=str, default='HalfCheetah-v2')
+    parser.add_argument('--env-id', type=str, default='Ant-v2')
     boolean_flag(parser, 'render-eval', default=False)
     boolean_flag(parser, 'layer-norm', default=True)
     boolean_flag(parser, 'render', default=False)
@@ -104,16 +104,16 @@ def parse_args():
     parser.add_argument('--nb-train-steps', type=int, default=50)  # per epoch cycle and MPI worker
     parser.add_argument('--nb-eval-steps', type=int, default=100)  # per epoch cycle and MPI worker
     parser.add_argument('--nb-rollout-steps', type=int, default=100)  # per epoch cycle and MPI worker
-    # parser.add_argument('--noise-type', type=str, default='adaptive-param_0.2')  # choices are adaptive-param_xx, ou_xx, normal_xx, none
     parser.add_argument('--noise-type', type=str, default='normal_0.2')  # choices are adaptive-param_xx, ou_xx, normal_xx, none
 
     parser.add_argument('--num-timesteps', type=int, default=None)
-    parser.add_argument('--alpha', type=int, default=None) # None for not
-    parser.add_argument('--alpha_num_samples', type=int, default=10) # None for not
-    parser.add_argument('--grad_num_samples', type=int, default=10) # None for not
+    parser.add_argument('--sigma', type=int, default=1) # None for not, Turns on Sigma-DDPG
+    boolean_flag(parser ,'surrogate', default=True)  # Turns on Surrogate-sigma-DDPG
+    boolean_flag(parser ,'expected', default=False) # Turns on Expected-sigma-DDPG
+    # The two following arguments are used only in Expected-sigma-DDQN,
+    parser.add_argument('--sigma_num_samples', type=int, default=10) # Number of samples used to expected_Q evaluation
+    parser.add_argument('--grad_num_samples', type=int, default=10) #  Number of samples to gradient evaluation
 
-
-    boolean_flag(parser ,'Q1', default=False)
     boolean_flag(parser ,'random-actor', default=True)
 
     boolean_flag(parser, 'evaluation', default=True)
@@ -130,15 +130,19 @@ def parse_args():
 if __name__ == '__main__':
     args = parse_args()
     if MPI.COMM_WORLD.Get_rank() == 0:
+
         name = ''
-        if args['alpha'] is not None:
-            name += 'ALPHA_'
-            if args['Q1']:
-                name += 'Q1_'
-            elif args['random_actor']:
-                name += 'Q2_{}_SAMPLES_RANDOMPOLICY_GRAD_{}_SAMPLES_'.format(args['alpha_num_samples'],args['grad_num_samples'])
+        if args['sigma'] is not None:
+            assert (args['expected'] != args['surrogate'])  # both versions can't run together
+            if args['surrogate']:
+                surrogate = True
             else:
-                name += 'Q2_{}_SAMPLES_'.format(args['alpha_num_samples'])
+                surrogate = False
+            name += 'SIGMA_'
+            if surrogate:
+                name += 'Surrogate_'
+            else:
+                name += 'Expected_{}_SAMPLES_'.format(args['sigma_num_samples'])
 
         else:
             name += 'Base_'

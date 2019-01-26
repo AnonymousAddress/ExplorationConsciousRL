@@ -14,8 +14,9 @@ from mpi4py import MPI
 
 def train(env, nb_epochs, nb_epoch_cycles, render_eval, reward_scale, render, param_noise, actor, critic,
     normalize_returns, normalize_observations, critic_l2_reg, actor_lr, critic_lr, action_noise,
-    popart, gamma, clip_norm, nb_train_steps, nb_rollout_steps, nb_eval_steps, batch_size, memory, alpha=None,
-    tau=0.01, eval_env=None, alpha_num_samples=10, grad_num_samples=10, param_noise_adaption_interval=50, Q1=False, random_actor=False):
+    popart, gamma, clip_norm, nb_train_steps, nb_rollout_steps, nb_eval_steps, batch_size, memory, sigma=None,
+    tau=0.01, eval_env=None, sigma_num_samples=10, grad_num_samples=10, param_noise_adaption_interval=50,
+          expected=False, surrogate=False, random_actor=False):
     rank = MPI.COMM_WORLD.Get_rank()
 
     assert (np.abs(env.action_space.low) == env.action_space.high).all()  # we assume symmetric actions.
@@ -25,7 +26,7 @@ def train(env, nb_epochs, nb_epoch_cycles, render_eval, reward_scale, render, pa
         gamma=gamma, tau=tau, normalize_returns=normalize_returns, normalize_observations=normalize_observations,
         batch_size=batch_size, action_noise=action_noise, param_noise=param_noise, critic_l2_reg=critic_l2_reg,
         actor_lr=actor_lr, critic_lr=critic_lr, enable_popart=popart, clip_norm=clip_norm,
-        reward_scale=reward_scale, alpha=alpha, alpha_num_samples=alpha_num_samples, grad_num_samples=grad_num_samples,
+        reward_scale=reward_scale, sigma=sigma, sigma_num_samples=sigma_num_samples, grad_num_samples=grad_num_samples,
                  random_actor=random_actor)
     logger.info('Using agent with the following configuration:')
     logger.info(str(agent.__dict__.items()))
@@ -71,8 +72,8 @@ def train(env, nb_epochs, nb_epoch_cycles, render_eval, reward_scale, render, pa
                 # Perform rollouts.
                 for t_rollout in range(nb_rollout_steps):
                     # Predict next action.
-                    if alpha is not None and Q1:
-                        action, q, noise, prev_noise, actor_action = agent.pi_Q1(obs, apply_noise=True, compute_Q=True)
+                    if sigma is not None and surrogate:
+                        action, q, noise, prev_noise, actor_action = agent.pi_surrogate(obs, apply_noise=True, compute_Q=True)
                         prev_noise = None
                     else:
                         action, q, noise, prev_noise = agent.pi(obs, apply_noise=True, compute_Q=True)
@@ -82,17 +83,7 @@ def train(env, nb_epochs, nb_epoch_cycles, render_eval, reward_scale, render, pa
                     if rank == 0 and render:
                         env.render()
                     assert max_action.shape == action.shape
-                    # if alpha:
-                    #     random_actions_flag = np.random.binomial(1, alpha_val, size=action.shape)
-                    #     def truncated_normal(mean=0.0, stddev=0.5, shape=action.shape):
-                    #         actions = np.random.normal(loc=mean, scale=stddev, size=shape)
-                    #         while np.any(np.abs(actions) > 1.0):
-                    #             actions = np.random.normal(loc=mean, scale=stddev, size=shape)
-                    #         return actions
-                    #     random_actions = truncated_normal()
-                    #     env_action = np.where(random_actions_flag, random_actions, action)
-                    # else:
-                    # env_action = action
+
                     new_obs, r, done, info = env.step(max_action * action)  # scale for execution in env (as far as DDPG is concerned, every action is in [-1, 1])
                     t += 1
                     if rank == 0 and render:
@@ -104,7 +95,7 @@ def train(env, nb_epochs, nb_epoch_cycles, render_eval, reward_scale, render, pa
                     epoch_actions.append(action)
                     epoch_qs.append(q)
 
-                    if alpha is not None and Q1:
+                    if sigma is not None and surrogate:
                         agent.store_transition(obs, actor_action, r, new_obs, done, noise, prev_noise)
                     else:
                         agent.store_transition(obs, action, r, new_obs, done, noise, prev_noise)

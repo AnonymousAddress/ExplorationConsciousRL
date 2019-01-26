@@ -11,7 +11,7 @@ import baselines.common.tf_util as U
 from baselines import logger
 from baselines.common.schedules import LinearSchedule, PiecewiseSchedule
 from baselines import deepq
-from baselines.deepq.replay_buffer import ReplayBuffer, PrioritizedReplayBuffer, ReplayBufferLam, PrioritizedReplayBufferLam
+from baselines.deepq.replay_buffer import ReplayBuffer, PrioritizedReplayBuffer
 from baselines.deepq.utils import BatchInput, FixedBatchInput, load_state, save_state
 from collections import deque
 
@@ -250,11 +250,6 @@ def learn(env,
     reset = True
     epinfobuf = deque(maxlen=100)
     test_flag = False
-    if auto_eps:
-        eps_buf = deque(maxlen=100)
-        first_eps_buf = deque(maxlen=100)
-        ep_eps_buf = deque()
-        done_cnt = -1
 
 
     with tempfile.TemporaryDirectory() as td:
@@ -372,15 +367,6 @@ def learn(env,
                 logger.record_tabular("episodes", num_episodes)
 
                 logger.record_tabular("% time spent exploring", int(100 * exploration.value(t)))
-                if auto_eps:
-                    mean_eps = safemean([eps for eps in eps_buf])
-                    logger.record_tabular("eps_mean", mean_eps)
-                    first_mean_eps = safemean([eps for eps in first_eps_buf])
-                    logger.record_tabular("eps_mean_first_100", first_mean_eps)
-                    ep_mean_eps = safemean([eps for eps in ep_eps_buf])
-                    logger.record_tabular("eps_mean_last_episode", ep_mean_eps)
-
-
 
                 logger.dump_tabular()
 
